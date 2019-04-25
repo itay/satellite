@@ -252,17 +252,10 @@ func (c *timeSkewChecker) getTimeSkew(node serf.Member) (skew time.Duration, err
 	c.logger.Debugf("%s retrieved UTC time %s", node.Name, t2)
 
 	/*
-		* As the coordinator received the response, coordinator gets second local
-		  timestamp. Let’s call it T1End.
-	*/
-	t1End := time.Now().UTC()
-	c.logger.Debugf("%s check finish UTC time %s", t1End)
-
-	/*
 		* Coordinator calculates the latency between itself and the node:
 		  (T1End-T1Start)/2. Let’s call this value Latency.
 	*/
-	nodesLatency := t1End.Sub(t1Start) / 2
+	nodesLatency := time.Since(t1Start) / 2
 	c.logger.Debugf("%s node timeSkew check latency is %s", node.Name, nodesLatency)
 
 	/*
@@ -270,7 +263,7 @@ func (c *timeSkewChecker) getTimeSkew(node serf.Member) (skew time.Duration, err
 		  T2-T1Start-Latency. Let’s call this value Skew. Can be negative which would
 		  mean the node time is falling behind.
 	*/
-	skew = t1Start.Sub(t2) - skew
+	skew = t1Start.Sub(t2) - nodesLatency
 	c.logger.Debugf("$s <-> %s => time skew is %s", c.self.Name, node.Name, skew.String())
 
 	/*
