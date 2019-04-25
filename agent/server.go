@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
@@ -41,6 +42,7 @@ const RPCPort = 7575 // FIXME: use serf to discover agents
 type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
+	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	Stop()
 }
 
@@ -70,6 +72,22 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 	resp.Status = r.agent.recentLocalStatus()
 
 	return resp, nil
+}
+
+// Time sends back the target node server time
+func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (resp *pb.TimeResponse, err error) {
+	resp = &pb.TimeResponse{}
+
+	if r.agent.name == req.GetName() {
+		now := time.Now()
+		resp.Name = r.agent.name
+		resp.Seconds = int64(now.Second())
+		resp.Nanoseconds = int32(now.Nanosecond())
+		return resp, nil
+	}
+
+	// return nothing if the request is not addressed to this node
+	return nil, nil
 }
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
