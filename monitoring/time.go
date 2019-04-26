@@ -263,7 +263,7 @@ func (c *timeSkewChecker) getTimeSkew(node serf.Member) (skew time.Duration, err
 		  T2-T1Start-Latency. Let’s call this value Skew. Can be negative which would
 		  mean the node time is falling behind.
 	*/
-	skew = t1Start.Sub(t2) - nodesLatency
+	skew = t2.Sub(t1Start) - nodesLatency
 	c.logger.Debugf("$s <-> %s => time skew is %s", c.self.Name, node.Name, skew.String())
 
 	/*
