@@ -46,6 +46,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -87,6 +88,17 @@ type TimeSkewCheckerConfig struct {
 	// NewSerfClient is an optional Serf Client function that can be used instead
 	// of the default one. If not specified it will fallback to the default one
 	NewSerfClient agent.NewSerfClientFunc
+	// TODO
+	SatellitePort int32
+	// TODO
+	SatelliteCAFile string
+	// TODO
+	SatelliteCertFile string
+	// TODO
+	SatelliteKeyFile string
+	// NewClient is an optional Satellite Client function that can be used instead
+	// of the default one. If not specified it will create a client to Satellite servers
+	NewSatelliteClient agent.NewClientFunc
 }
 
 // CheckAndSetDefaults is an helper function which just check that the provided
@@ -101,12 +113,15 @@ func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
 	if c.NewSerfClient == nil {
 		c.NewSerfClient = agent.NewSerfClient
 	}
+	if c.NewSatelliteClient == nil {
+		c.NewSatelliteClient = agent.NewClient
+	}
 	return nil
 }
 
 // NewTimeSkewChecker returns a checker that verifies time skew of nodes in
 // the cluster
-func NewTimeSkewChecker(conf PingCheckerConfig) (c health.Checker, err error) {
+func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error) {
 	err = conf.CheckAndSetDefaults()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -191,7 +206,7 @@ func (c *timeSkewChecker) check(ctx context.Context, r health.Reporter) (probeSe
 		return pb.Probe_None, trace.Wrap(err)
 	}
 
-	probeSeverity, err = c.checkTimeSkew(nodes, client)
+	probeSeverity, err = c.checkTimeSkew(ctx, nodes, client)
 	if err != nil {
 		return pb.Probe_None, trace.Wrap(err)
 	}
@@ -199,7 +214,7 @@ func (c *timeSkewChecker) check(ctx context.Context, r health.Reporter) (probeSe
 	return probeSeverity, nil
 }
 
-func (c *timeSkewChecker) checkTimeSkew(nodes []serf.Member, client agent.SerfClient) (probeSeverity pb.Probe_Severity, err error) {
+func (c *timeSkewChecker) checkTimeSkew(ctx context.Context, nodes []serf.Member, client agent.SerfClient) (probeSeverity pb.Probe_Severity, err error) {
 	probeSeverity = pb.Probe_None
 
 	for _, node := range nodes {
@@ -215,7 +230,11 @@ func (c *timeSkewChecker) checkTimeSkew(nodes []serf.Member, client agent.SerfCl
 		}
 		c.logger.Debugf("node %s status %s", node.Name, node.Status)
 
-		skew, err := c.getTimeSkew(node)
+		client, err := agent.NewClient(
+			fmt.Sprintf("%s:%s", node.Addr.String(), node.agentPort), // TODO store agent conf in Serf?
+			caFile, certFile, keyFile)
+
+		skew, err := c.getTimeSkew(ctx, client, node)
 		if err != nil {
 			return probeSeverity, err
 		}
@@ -233,7 +252,7 @@ func (c *timeSkewChecker) checkTimeSkew(nodes []serf.Member, client agent.SerfCl
 	return probeSeverity, nil
 }
 
-func (c *timeSkewChecker) getTimeSkew(node serf.Member) (skew time.Duration, err error) {
+func (c *timeSkewChecker) getTimeSkew(ctx context.Context, client agent.Client, node serf.Member) (skew time.Duration, err error) {
 	/*
 		* Selected coordinator node records it’s local timestamp (in UTC). Let’s call
 		  this timestamp T1Start.

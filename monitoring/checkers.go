@@ -72,6 +72,18 @@ func PingHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error
 	return c, nil
 }
 
+// TimeSkew creates a checker that monitors time difference between master nodes
+func TimeSkewHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error) {
+	c, err = NewTimeSkewChecker(TimeSkewCheckerConfig{
+		SerfRPCAddr:    serfRPCAddr,
+		SerfMemberName: serfMemberName,
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return c, nil
+}
+
 // EtcdHealth creates a checker that checks health of etcd
 func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"

@@ -44,6 +44,9 @@ type client struct {
 	conn *grpc.ClientConn
 }
 
+// TODO
+type NewClientFunc func(addr, caFile, certFile, keyFile string) (*client, error)
+
 // NewClient creates a agent RPC client to the given address
 // using the specified client certificate certFile
 func NewClient(addr, caFile, certFile, keyFile string) (*client, error) {

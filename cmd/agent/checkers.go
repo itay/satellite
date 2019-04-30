@@ -75,12 +75,20 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	j
+	timeSkewHealth, err := monitoring.TimeSkewHealth(config.serfRPCAddr,
+		config.serfMemberName)
+
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
 	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
 	node.AddChecker(pingHealth)
+	node.AddChecker(timeSkewHealth)
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
