@@ -75,7 +75,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	j
+
 	timeSkewHealth, err := monitoring.TimeSkewHealth(config.serfRPCAddr,
 		config.serfMemberName)
 
