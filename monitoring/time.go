@@ -81,6 +81,14 @@ type timeSkewChecker struct {
 
 // TimeSkewCheckerConfig is used to store all the configuration related to the current check
 type TimeSkewCheckerConfig struct {
+	// // RPCAddrs is a list of addresses the monitoring gRPC agent will listen on
+	// RPCAddrs []string
+	// // TODO
+	// agentCAFile string
+	// // TODO
+	// agentCertFile string
+	// // TODO
+	// agentKeyFile string
 	// SerfRPCAddr is the address used by the Serf RPC client to communicate
 	SerfRPCAddr string
 	// SerfMemberName is the name associated to this node in Serf
@@ -88,22 +96,26 @@ type TimeSkewCheckerConfig struct {
 	// NewSerfClient is an optional Serf Client function that can be used instead
 	// of the default one. If not specified it will fallback to the default one
 	NewSerfClient agent.NewSerfClientFunc
-	// TODO
-	SatellitePort int32
-	// TODO
-	SatelliteCAFile string
-	// TODO
-	SatelliteCertFile string
-	// TODO
-	SatelliteKeyFile string
-	// NewClient is an optional Satellite Client function that can be used instead
+	// NewAgentClient is an optional Satellite Client function that can be used instead
 	// of the default one. If not specified it will create a client to Satellite servers
-	NewSatelliteClient agent.NewClientFunc
+	NewAgentClient agent.NewClientFunc
 }
 
 // CheckAndSetDefaults is an helper function which just check that the provided
 // check config is in order and eventually set default values where needed/possible
 func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
+	//if len(c.RPCAddrs) < 1 {
+	//	return trace.BadParameter("gRPC address list can't be empty")
+	//}
+	//if c.agentCAFile == "" {
+	//	return trace.BadParameter("agent CA certificate file can't be empty")
+	//}
+	//if c.agentCertFile == "" {
+	//	return trace.BadParameter("agent certificate file can't be empty")
+	//}
+	//if c.agentKeyFile == "" {
+	//	return trace.BadParameter("agent certificate key file can't be empty")
+	//}
 	if c.SerfRPCAddr == "" {
 		return trace.BadParameter("serf rpc address can't be empty")
 	}
@@ -113,8 +125,8 @@ func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
 	if c.NewSerfClient == nil {
 		c.NewSerfClient = agent.NewSerfClient
 	}
-	if c.NewSatelliteClient == nil {
-		c.NewSatelliteClient = agent.NewClient
+	if c.NewAgentClient == nil {
+		c.NewAgentClient = agent.NewClient
 	}
 	return nil
 }
@@ -231,8 +243,9 @@ func (c *timeSkewChecker) checkTimeSkew(ctx context.Context, nodes []serf.Member
 		c.logger.Debugf("node %s status %s", node.Name, node.Status)
 
 		client, err := agent.NewClient(
-			fmt.Sprintf("%s:%s", node.Addr.String(), node.agentPort), // TODO store agent conf in Serf?
-			caFile, certFile, keyFile)
+			fmt.Sprintf("%s:%s", node.Addr.String(), nil),
+			"", "", "",
+		)
 
 		skew, err := c.getTimeSkew(ctx, client, node)
 		if err != nil {
