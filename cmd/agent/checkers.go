@@ -29,6 +29,14 @@ import (
 type config struct {
 	// role is the current agent's role
 	role agent.Role
+	// rpcAddrs is the list of listening addresses on RPC agents
+	rpcAddrs []string
+	// agentCAFile set the file location for the Agent CA cert
+	agentCAFile string
+	// agentCertFile set the file location for the Agent cert
+	agentCertFile string
+	// agentKeyFile set the file location for the Agent cert key
+	agentKeyFile string
 	// serfRPCAddr is the Serf RPC endpoint address
 	serfRPCAddr string
 	// serfMemberName is used as the Node name in the Serf cluster
@@ -76,8 +84,9 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	timeSkewHealth, err := monitoring.TimeSkewHealth(config.serfRPCAddr,
-		config.serfMemberName)
+	timeSkewHealth, err := monitoring.TimeSkewHealth(config.rpcAddrs,
+		config.agentCAFile, config.agentCertFile, config.agentKeyFile,
+		config.serfRPCAddr, config.serfMemberName)
 
 	if err != nil {
 		return trace.Wrap(err)
