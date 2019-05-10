@@ -46,7 +46,6 @@ package monitoring
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +71,7 @@ const (
 // cluster nodes remains withing the specified threshold
 type timeSkewChecker struct {
 	self           serf.Member
+	agentClient    agent.Client
 	serfClient     agent.SerfClient
 	serfRPCAddr    string
 	serfMemberName string
@@ -81,14 +81,14 @@ type timeSkewChecker struct {
 
 // TimeSkewCheckerConfig is used to store all the configuration related to the current check
 type TimeSkewCheckerConfig struct {
-	// // RPCAddrs is a list of addresses the monitoring gRPC agent will listen on
-	// RPCAddrs []string
-	// // TODO
-	// agentCAFile string
-	// // TODO
-	// agentCertFile string
-	// // TODO
-	// agentKeyFile string
+	// RPCAddrs is a list of addresses the monitoring gRPC agent will listen on
+	RPCAddrs []string
+	// TODO
+	agentCAFile string
+	// TODO
+	agentCertFile string
+	// TODO
+	agentKeyFile string
 	// SerfRPCAddr is the address used by the Serf RPC client to communicate
 	SerfRPCAddr string
 	// SerfMemberName is the name associated to this node in Serf
@@ -104,18 +104,18 @@ type TimeSkewCheckerConfig struct {
 // CheckAndSetDefaults is an helper function which just check that the provided
 // check config is in order and eventually set default values where needed/possible
 func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
-	//if len(c.RPCAddrs) < 1 {
-	//	return trace.BadParameter("gRPC address list can't be empty")
-	//}
-	//if c.agentCAFile == "" {
-	//	return trace.BadParameter("agent CA certificate file can't be empty")
-	//}
-	//if c.agentCertFile == "" {
-	//	return trace.BadParameter("agent certificate file can't be empty")
-	//}
-	//if c.agentKeyFile == "" {
-	//	return trace.BadParameter("agent certificate key file can't be empty")
-	//}
+	if len(c.RPCAddrs) < 1 {
+		return trace.BadParameter("agent RPC listening address list can't be empty")
+	}
+	if c.agentCAFile == "" {
+		return trace.BadParameter("agent CA certificate file can't be empty")
+	}
+	if c.agentCertFile == "" {
+		return trace.BadParameter("agent certificate file can't be empty")
+	}
+	if c.agentKeyFile == "" {
+		return trace.BadParameter("agent certificate key file can't be empty")
+	}
 	if c.SerfRPCAddr == "" {
 		return trace.BadParameter("serf rpc address can't be empty")
 	}
@@ -143,7 +143,14 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 	logger.Debugf("using Serf IP: %v", conf.SerfRPCAddr)
 	logger.Debugf("using Serf Name: %v", conf.SerfMemberName)
 
-	client, err := conf.NewSerfClient(serf.Config{
+	RPCAddr := nonLoopback(conf.RPCAddrs)
+	agentClient, err := conf.NewAgentClient(RPCAddr,
+		conf.agentCAFile, conf.agentCertFile, conf.agentKeyFile)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	serfClient, err := conf.NewSerfClient(serf.Config{
 		Addr: conf.SerfRPCAddr,
 	})
 	if err != nil {
@@ -151,7 +158,7 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 	}
 
 	// retrieve other nodes using Serf members
-	nodes, err := client.Members()
+	nodes, err := serfClient.Members()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -173,11 +180,22 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 
 	return &timeSkewChecker{
 		self:           self,
-		serfClient:     client,
+		agentClient:    agentClient,
+		serfClient:     serfClient,
 		serfRPCAddr:    conf.SerfRPCAddr,
 		serfMemberName: conf.SerfMemberName,
 		logger:         *logger,
 	}, nil
+}
+
+// nonLoopback iterates through a slice of IPs and return the first non loopback
+func nonLoopback(addrs []string) (addr string) {
+	for _, v := range addrs {
+		if !strings.Contains(v, "127.0.0.1") {
+			return v
+		}
+	}
+	return "" // not found
 }
 
 // Name returns the checker name
@@ -211,14 +229,14 @@ func (c *timeSkewChecker) check(ctx context.Context, r health.Reporter) (probeSe
 	/*
 		Fetch Serf cluster members and start iterating and running the check
 	*/
-	client := c.serfClient
+	serfClient := c.serfClient
 
-	nodes, err := client.Members()
+	nodes, err := serfClient.Members()
 	if err != nil {
 		return pb.Probe_None, trace.Wrap(err)
 	}
 
-	probeSeverity, err = c.checkTimeSkew(ctx, nodes, client)
+	probeSeverity, err = c.checkTimeSkew(ctx, nodes)
 	if err != nil {
 		return pb.Probe_None, trace.Wrap(err)
 	}
@@ -226,7 +244,7 @@ func (c *timeSkewChecker) check(ctx context.Context, r health.Reporter) (probeSe
 	return probeSeverity, nil
 }
 
-func (c *timeSkewChecker) checkTimeSkew(ctx context.Context, nodes []serf.Member, client agent.SerfClient) (probeSeverity pb.Probe_Severity, err error) {
+func (c *timeSkewChecker) checkTimeSkew(ctx context.Context, nodes []serf.Member) (probeSeverity pb.Probe_Severity, err error) {
 	probeSeverity = pb.Probe_None
 
 	for _, node := range nodes {
@@ -242,12 +260,7 @@ func (c *timeSkewChecker) checkTimeSkew(ctx context.Context, nodes []serf.Member
 		}
 		c.logger.Debugf("node %s status %s", node.Name, node.Status)
 
-		client, err := agent.NewClient(
-			fmt.Sprintf("%s:%s", node.Addr.String(), nil),
-			"", "", "",
-		)
-
-		skew, err := c.getTimeSkew(ctx, client, node)
+		skew, err := c.getTimeSkew(ctx, node)
 		if err != nil {
 			return probeSeverity, err
 		}
@@ -265,7 +278,7 @@ func (c *timeSkewChecker) checkTimeSkew(ctx context.Context, nodes []serf.Member
 	return probeSeverity, nil
 }
 
-func (c *timeSkewChecker) getTimeSkew(ctx context.Context, client agent.Client, node serf.Member) (skew time.Duration, err error) {
+func (c *timeSkewChecker) getTimeSkew(ctx context.Context, node serf.Member) (skew time.Duration, err error) {
 	/*
 		* Selected coordinator node records it’s local timestamp (in UTC). Let’s call
 		  this timestamp T1Start.
@@ -280,7 +293,10 @@ func (c *timeSkewChecker) getTimeSkew(ctx context.Context, client agent.Client, 
 		* The node responds to the ping request replying with node’s local timestamp
 		  (in UTC) in the payload. Let’s call this timestamp T2.
 	*/
-	t2 := time.Now().UTC() // TODO - target node's time, retrieved via gRPC
+	t2resp, err := c.agentClient.Time(ctx, &pb.TimeRequest{
+		Name: node.Name,
+	})
+	t2 := time.Unix(t2resp.GetSeconds(), t2resp.GetNanoseconds())
 	c.logger.Debugf("%s retrieved UTC time %s", node.Name, t2)
 
 	/*

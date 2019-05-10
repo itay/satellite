@@ -82,7 +82,7 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (resp *pb.TimeRe
 		now := time.Now()
 		resp.Name = r.agent.name
 		resp.Seconds = int64(now.Second())
-		resp.Nanoseconds = int32(now.Nanosecond())
+		resp.Nanoseconds = int64(now.Nanosecond())
 		return resp, nil
 	}
 
