@@ -46,6 +46,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -71,7 +72,7 @@ const (
 // cluster nodes remains withing the specified threshold
 type timeSkewChecker struct {
 	self           serf.Member
-	agentClient    agent.Client
+	agentClients   map[string]agent.Client
 	serfClient     agent.SerfClient
 	serfRPCAddr    string
 	serfMemberName string
@@ -143,13 +144,6 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 	logger.Debugf("using Serf IP: %v", conf.SerfRPCAddr)
 	logger.Debugf("using Serf Name: %v", conf.SerfMemberName)
 
-	RPCAddr := nonLoopback(conf.RPCAddrs)
-	agentClient, err := conf.NewAgentClient(RPCAddr,
-		conf.agentCAFile, conf.agentCertFile, conf.agentKeyFile)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
 	serfClient, err := conf.NewSerfClient(serf.Config{
 		Addr: conf.SerfRPCAddr,
 	})
@@ -164,6 +158,7 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 	}
 	// finding what is the current node
 	var self serf.Member
+	var rpcAgents map[string]agent.Client
 	for _, node := range nodes {
 		logger.Debugf("node %s status %s", node.Name, node.Status)
 		if node.Status != pb.MemberStatus_Alive.String() {
@@ -173,6 +168,22 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 			self = node
 			break // self node found, breaking out of the for loop
 		}
+
+		// TODO -- add explainatory comments
+		rpcAddrAndPort := nonLoopback(conf.RPCAddrs)
+		rpcPort := strings.Split(rpcAddrAndPort, ":")[1]
+		if rpcPort == "" {
+			rpcPort = "7575"
+		}
+		rpcAddr := fmt.Sprintf("%v:%v", node.Addr, rpcPort)
+		logger.Debugf("creating monitoring agent on %v with CAFile(%v), certFile(%v) and KeyFile(%v)",
+			rpcAddr, conf.agentCAFile, conf.agentCertFile, conf.agentKeyFile)
+		rpcAgents[node.Name], err = conf.NewAgentClient(rpcAddr,
+			conf.agentCAFile, conf.agentCertFile, conf.agentKeyFile)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
 	}
 	if self.Name == "" {
 		return nil, trace.NotFound("failed to find Serf member with name %s", conf.SerfMemberName)
@@ -180,7 +191,7 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 
 	return &timeSkewChecker{
 		self:           self,
-		agentClient:    agentClient,
+		agentClients:   rpcAgents,
 		serfClient:     serfClient,
 		serfRPCAddr:    conf.SerfRPCAddr,
 		serfMemberName: conf.SerfMemberName,
@@ -293,7 +304,7 @@ func (c *timeSkewChecker) getTimeSkew(ctx context.Context, node serf.Member) (sk
 		* The node responds to the ping request replying with node’s local timestamp
 		  (in UTC) in the payload. Let’s call this timestamp T2.
 	*/
-	t2resp, err := c.agentClient.Time(ctx, &pb.TimeRequest{
+	t2resp, err := c.agentClients[node.Name].Time(ctx, &pb.TimeRequest{
 		Name: node.Name,
 	})
 	t2 := time.Unix(t2resp.GetSeconds(), t2resp.GetNanoseconds())
