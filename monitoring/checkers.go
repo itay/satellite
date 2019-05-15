@@ -76,9 +76,9 @@ func PingHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error
 func TimeSkewHealth(rpcAddrs []string, agentCAfile, agentCertFile, agentKeyFile, serfRPCAddr, serfMemberName string) (c health.Checker, err error) {
 	c, err = NewTimeSkewChecker(TimeSkewCheckerConfig{
 		RPCAddrs:       rpcAddrs,
-		agentCAFile:    agentCAfile,
-		agentCertFile:  agentCertFile,
-		agentKeyFile:   agentKeyFile,
+		AgentCAFile:    agentCAfile,
+		AgentCertFile:  agentCertFile,
+		AgentKeyFile:   agentKeyFile,
 		SerfRPCAddr:    serfRPCAddr,
 		SerfMemberName: serfMemberName,
 	})
