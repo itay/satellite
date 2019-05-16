@@ -85,11 +85,11 @@ type TimeSkewCheckerConfig struct {
 	// RPCAddrs is a list of addresses the monitoring gRPC agent will listen on
 	RPCAddrs []string
 	// TODO
-	AgentCAFile string
+	CAFile string
 	// TODO
-	AgentCertFile string
+	CertFile string
 	// TODO
-	AgentKeyFile string
+	KeyFile string
 	// SerfRPCAddr is the address used by the Serf RPC client to communicate
 	SerfRPCAddr string
 	// SerfMemberName is the name associated to this node in Serf
@@ -108,13 +108,13 @@ func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
 	if len(c.RPCAddrs) < 1 {
 		return trace.BadParameter("agent RPC listening address list can't be empty")
 	}
-	if c.AgentCAFile == "" {
+	if c.CAFile == "" {
 		return trace.BadParameter("agent CA certificate file can't be empty")
 	}
-	if c.AgentCertFile == "" {
+	if c.CertFile == "" {
 		return trace.BadParameter("agent certificate file can't be empty")
 	}
-	if c.AgentKeyFile == "" {
+	if c.KeyFile == "" {
 		return trace.BadParameter("agent certificate key file can't be empty")
 	}
 	if c.SerfRPCAddr == "" {
@@ -184,9 +184,9 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 
 		rpcAddr := fmt.Sprintf("%v:%v", node.Addr, rpcPort)
 		logger.Debugf("connecting to %v monitoring agent on %v with CAFile(%v), certFile(%v) and KeyFile(%v)",
-			conf.SerfMemberName, rpcAddr, conf.AgentCAFile, conf.AgentCertFile, conf.AgentKeyFile)
+			conf.SerfMemberName, rpcAddr, conf.CAFile, conf.CertFile, conf.KeyFile)
 		rpcAgents[node.Name], err = conf.NewAgentClient(rpcAddr,
-			conf.AgentCAFile, conf.AgentCertFile, conf.AgentKeyFile)
+			conf.CAFile, conf.CertFile, conf.KeyFile)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
