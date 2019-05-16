@@ -279,9 +279,11 @@ func (r *agent) Close() (err error) {
 
 	r.rpc.Stop()
 	close(r.done)
-	err = r.SerfClient.Close()
-	if err != nil {
-		errors = append(errors, trace.Wrap(err))
+	if r.SerfClient != nil {
+		err = r.SerfClient.Close()
+		if err != nil {
+			errors = append(errors, trace.Wrap(err))
+		}
 	}
 
 	if len(errors) > 0 {
