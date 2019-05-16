@@ -151,6 +151,19 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 		return nil, trace.Wrap(err)
 	}
 
+	// find out the RPC port used by agents in this cluster
+	rpcPort := "7575" // default RPC Gravity agent port
+	// getting first non loopback address
+	nonLoopbackRPCAddr := nonLoopback(conf.RPCAddrs)
+	if nonLoopbackRPCAddr != "" {
+		// splitting address from port, divided by ":"
+		rpcAddrAndPort := strings.Split(nonLoopbackRPCAddr, ":")
+		// if a port is specified, the list will be 2 items long
+		if len(rpcAddrAndPort) > 1 {
+			rpcPort = rpcAddrAndPort[1]
+		}
+	}
+
 	// retrieve other nodes using Serf members
 	nodes, err := serfClient.Members()
 	if err != nil {
@@ -169,15 +182,9 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 			break // self node found, breaking out of the for loop
 		}
 
-		// TODO -- add explainatory comments
-		rpcAddrAndPort := nonLoopback(conf.RPCAddrs)
-		rpcPort := strings.Split(rpcAddrAndPort, ":")[1]
-		if rpcPort == "" {
-			rpcPort = "7575"
-		}
 		rpcAddr := fmt.Sprintf("%v:%v", node.Addr, rpcPort)
-		logger.Debugf("creating monitoring agent on %v with CAFile(%v), certFile(%v) and KeyFile(%v)",
-			rpcAddr, conf.AgentCAFile, conf.AgentCertFile, conf.AgentKeyFile)
+		logger.Debugf("connecting to %v monitoring agent on %v with CAFile(%v), certFile(%v) and KeyFile(%v)",
+			conf.SerfMemberName, rpcAddr, conf.AgentCAFile, conf.AgentCertFile, conf.AgentKeyFile)
 		rpcAgents[node.Name], err = conf.NewAgentClient(rpcAddr,
 			conf.AgentCAFile, conf.AgentCertFile, conf.AgentKeyFile)
 		if err != nil {
@@ -201,6 +208,10 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 
 // nonLoopback iterates through a slice of IPs and return the first non loopback
 func nonLoopback(addrs []string) (addr string) {
+	// possible examples of addrs
+	// nil, [], [""], ["127.0.0.1"], ["127.0.0.1:7575"],
+	// ["127.0.0.1", "192.168.1.0"], ["127.0.0.1:7575", "192.168.1.0"],
+	// ["127.0.0.1", "192.168.1.0:7575"], ["127.0.0.1:7575", "192.168.1.0:7575"],
 	for _, v := range addrs {
 		if !strings.Contains(v, "127.0.0.1") {
 			return v
