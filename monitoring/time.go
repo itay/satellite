@@ -121,7 +121,7 @@ func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
 		return trace.BadParameter("serf rpc address can't be empty")
 	}
 	if c.NodeName == "" {
-		return trace.BadParameter("serf member name can't be empty")
+		return trace.BadParameter("node name can't be empty")
 	}
 	if c.NewSerfClient == nil {
 		c.NewSerfClient = agent.NewSerfClient
