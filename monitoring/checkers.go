@@ -73,14 +73,14 @@ func PingHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error
 }
 
 // TimeSkew creates a checker that monitors time difference between master nodes
-func TimeSkewHealth(rpcAddrs []string, CAfile, CertFile, KeyFile, serfRPCAddr, serfMemberName string) (c health.Checker, err error) {
+func TimeSkewHealth(rpcAddrs []string, CAfile, CertFile, KeyFile, serfRPCAddr, nodeName string) (c health.Checker, err error) {
 	c, err = NewTimeSkewChecker(TimeSkewCheckerConfig{
-		RPCAddrs:       rpcAddrs,
-		CAFile:         CAfile,
-		CertFile:       CertFile,
-		KeyFile:        KeyFile,
-		SerfRPCAddr:    serfRPCAddr,
-		SerfMemberName: serfMemberName,
+		RPCAddrs:    rpcAddrs,
+		CAFile:      CAfile,
+		CertFile:    CertFile,
+		KeyFile:     KeyFile,
+		SerfRPCAddr: serfRPCAddr,
+		NodeName:    nodeName,
 	})
 	if err != nil {
 		return nil, trace.Wrap(err)

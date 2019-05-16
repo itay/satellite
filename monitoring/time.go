@@ -71,13 +71,13 @@ const (
 // timeSkewChecker is a checker that verifies that the time difference between
 // cluster nodes remains withing the specified threshold
 type timeSkewChecker struct {
-	self           serf.Member
-	agentClients   map[string]agent.Client
-	serfClient     agent.SerfClient
-	serfRPCAddr    string
-	serfMemberName string
-	mux            sync.Mutex
-	logger         log.Entry
+	self         serf.Member
+	agentClients map[string]agent.Client
+	serfClient   agent.SerfClient
+	serfRPCAddr  string
+	nodeName     string
+	mux          sync.Mutex
+	logger       log.Entry
 }
 
 // TimeSkewCheckerConfig is used to store all the configuration related to the current check
@@ -92,8 +92,8 @@ type TimeSkewCheckerConfig struct {
 	KeyFile string
 	// SerfRPCAddr is the address used by the Serf RPC client to communicate
 	SerfRPCAddr string
-	// SerfMemberName is the name associated to this node in Serf
-	SerfMemberName string
+	// NodeName is the name associated to this node in Serf
+	NodeName string
 	// NewSerfClient is an optional Serf Client function that can be used instead
 	// of the default one. If not specified it will fallback to the default one
 	NewSerfClient agent.NewSerfClientFunc
@@ -120,7 +120,7 @@ func (c *TimeSkewCheckerConfig) CheckAndSetDefaults() error {
 	if c.SerfRPCAddr == "" {
 		return trace.BadParameter("serf rpc address can't be empty")
 	}
-	if c.SerfMemberName == "" {
+	if c.NodeName == "" {
 		return trace.BadParameter("serf member name can't be empty")
 	}
 	if c.NewSerfClient == nil {
@@ -142,7 +142,7 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 
 	logger := log.WithFields(log.Fields{trace.Component: "timeSkew"})
 	logger.Debugf("using Serf IP: %v", conf.SerfRPCAddr)
-	logger.Debugf("using Serf Name: %v", conf.SerfMemberName)
+	logger.Debugf("using Serf Name: %v", conf.NodeName)
 
 	serfClient, err := conf.NewSerfClient(serf.Config{
 		Addr: conf.SerfRPCAddr,
@@ -177,14 +177,14 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 		if node.Status != pb.MemberStatus_Alive.String() {
 			continue
 		}
-		if node.Name == conf.SerfMemberName {
+		if node.Name == conf.NodeName {
 			self = node
 			break // self node found, breaking out of the for loop
 		}
 
 		rpcAddr := fmt.Sprintf("%v:%v", node.Addr, rpcPort)
 		logger.Debugf("connecting to %v monitoring agent on %v with CAFile(%v), certFile(%v) and KeyFile(%v)",
-			conf.SerfMemberName, rpcAddr, conf.CAFile, conf.CertFile, conf.KeyFile)
+			conf.NodeName, rpcAddr, conf.CAFile, conf.CertFile, conf.KeyFile)
 		rpcAgents[node.Name], err = conf.NewAgentClient(rpcAddr,
 			conf.CAFile, conf.CertFile, conf.KeyFile)
 		if err != nil {
@@ -193,16 +193,16 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 
 	}
 	if self.Name == "" {
-		return nil, trace.NotFound("failed to find Serf member with name %s", conf.SerfMemberName)
+		return nil, trace.NotFound("failed to find Serf member with name %s", conf.NodeName)
 	}
 
 	return &timeSkewChecker{
-		self:           self,
-		agentClients:   rpcAgents,
-		serfClient:     serfClient,
-		serfRPCAddr:    conf.SerfRPCAddr,
-		serfMemberName: conf.SerfMemberName,
-		logger:         *logger,
+		self:         self,
+		agentClients: rpcAgents,
+		serfClient:   serfClient,
+		serfRPCAddr:  conf.SerfRPCAddr,
+		nodeName:     conf.NodeName,
+		logger:       *logger,
 	}, nil
 }
 
