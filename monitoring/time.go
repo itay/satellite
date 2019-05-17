@@ -179,6 +179,7 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 		}
 		if node.Name == conf.Name {
 			self = node
+			logger.Debugf("self SerfNode [%v] found [%v]", node.Name, conf.Name)
 			break // self node found, breaking out of the for loop
 		}
 
