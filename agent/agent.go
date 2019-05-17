@@ -60,6 +60,9 @@ type Config struct {
 	// can match itself to a serf member.
 	Name string
 
+	// NodeName is the name assigned by Kubernetes to this node
+	NodeName string
+
 	// RPCAddrs is a list of addresses agent binds to for RPC traffic.
 	//
 	// Usually, at least two address are used for operation.
