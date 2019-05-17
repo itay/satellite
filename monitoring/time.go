@@ -75,7 +75,7 @@ type timeSkewChecker struct {
 	agentClients map[string]agent.Client
 	serfClient   agent.SerfClient
 	serfRPCAddr  string
-	nodeName     string
+	name         string
 	mux          sync.Mutex
 	logger       log.Entry
 }
@@ -201,7 +201,7 @@ func NewTimeSkewChecker(conf TimeSkewCheckerConfig) (c health.Checker, err error
 		agentClients: rpcAgents,
 		serfClient:   serfClient,
 		serfRPCAddr:  conf.SerfRPCAddr,
-		nodeName:     conf.Name,
+		name:         conf.Name,
 		logger:       *logger,
 	}, nil
 }
